@@ -1,42 +1,43 @@
 pipeline {
-    agent any
+  agent any
+  tools { 
+    jdk 'JDK17'          // must match the name in Manage Jenkins → Global Tool Configuration
+    maven 'Maven_3_9'    // must match your Maven installation name
+  }
 
-    tools {
-        jdk 'JDK17'         // Must match your Jenkins JDK name
-        maven 'Maven_3.9'   // Must match your Jenkins Maven installation name
+  stages {
+    stage('Checkout') {
+      steps {
+        // If your job is "Pipeline script from SCM", use checkout scm
+        checkout scm
+        // If you run a plain Pipeline job and need to hardcode the repo, use this line instead:
+        // git branch: 'main', url: 'https://github.com/saugatp0kharel/CalculatorJUnitLab.git'
+      }
     }
 
-    options {
-        timestamps()
+    stage('Test & Generate Coverage XML') {
+      steps {
+        // This creates target/site/jacoco/jacoco.xml and index.html
+        sh 'mvn -B clean test jacoco:report'
+      }
     }
 
-    stages {
-        stage('Checkout Code') {
-            steps {
-                git branch: 'main', url: 'https://github.com/saugatp0kharel/CalculatorJUnitLab.git'
-            }
-        }
+    stage('Publish Reports') {
+      steps {
+        // Publish JUnit
+        junit 'target/surefire-reports/*.xml'
 
-        stage('Build & Test') {
-            steps {
-                // Use 'sh' for macOS/Linux Jenkins, or 'bat' for Windows
-                sh 'mvn clean verify'
-            }
-        }
+        // ✅ Use Coverage Plugin (NOT the old JaCoCo plugin)
+        recordCoverage(tools: [jacoco(pattern: 'target/site/jacoco/jacoco.xml')])
 
-        stage('Generate Coverage Report') {
-            steps {
-                jacoco execPattern: '**/jacoco.exec'
-            }
-        }
+        // Keep HTML report as artifact (optional but nice for screenshots)
+        archiveArtifacts artifacts: 'target/site/jacoco/**', fingerprint: true
+      }
     }
+  }
 
-    post {
-        success {
-            echo '✅ Build and coverage completed successfully!'
-        }
-        failure {
-            echo '❌ Build or tests failed. Check logs!'
-        }
-    }
+  post {
+    success { echo '✅ Build and coverage completed successfully!' }
+    failure { echo '❌ Build or tests failed. Check logs!' }
+  }
 }
